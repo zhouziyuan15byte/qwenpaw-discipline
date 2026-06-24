@@ -59,6 +59,14 @@ async def _patched_acting(self, tool_call) -> dict | None:
         if act == "start" and ti.get("headed") is not True:
             ti["headed"] = True
             ti["browser_args"] = "--force-dark-mode --window-size=900,600"
+            # Also fix state dict
+            try:
+                from qwenpaw.agents.tools.browser_control import _get_workspace_state
+                ws_id = str(getattr(self, "_workspace_dir", "")).rstrip("/").split("/")[-1]
+                if ws_id:
+                    _get_workspace_state(ws_id)["headless"] = False
+            except Exception:
+                pass
 
     elif tn == "execute_shell_command":
         cmd = str(ti.get("command", ""))
@@ -169,6 +177,11 @@ async def _inject_browser_tabs(self) -> None:
             return
         ws_id = str(ws_id).rstrip("/").split("/")[-1]
         state = _get_workspace_state(ws_id)
+        # Warn if browser is headless
+        if state.get("headless"):
+            await self.memory.add(Msg("system", [TextBlock(
+                type="text", text="⚠️ 当前浏览器为 headless，可能被封。请用 headed=true 启动。"
+            )], "system"))
         tabs = await _get_tab_info_list(state)
         if tabs:
             lines = [f"  [{i}] {t.get('url','?')[:100]} — {t.get('title','')[:60]}" for i, t in enumerate(tabs)]
